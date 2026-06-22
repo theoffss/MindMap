@@ -29,7 +29,7 @@ const state = {
   fileName: "",
   fileSizeText: "",
   opmlString: "",
-  activeTab: "tab-tree",
+  activeTab: "tab-columns",
   theme: "dark",
   activeHistoryId: null as string | null
 };
@@ -872,6 +872,26 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
       `;
       itemBtn.appendChild(noteIcon);
     }
+
+    // Add sub-topic "+" button
+    const addSubBtn = document.createElement('button');
+    addSubBtn.className = 'finder-item-add-btn';
+    addSubBtn.title = 'Ajouter un sous-sujet';
+    addSubBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+    `;
+    addSubBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!node.topics) node.topics = [];
+      const newChild: MindmapNode = { title: "Nouveau sujet", _collapsed: false };
+      node.topics.push(newChild);
+      selectNode(newChild);
+      refreshAllViews();
+    });
+    itemBtn.appendChild(addSubBtn);
 
     // Chevron if has subtopics
     const hasChildren = node.topics && node.topics.length > 0;

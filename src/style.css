@@ -1061,6 +1061,38 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-primary);
 }
 
+.finder-item-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-green);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  padding: 0;
+  margin-left: auto;
+}
+
+.finder-item-add-btn svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.finder-item:hover .finder-item-add-btn {
+  opacity: 0.8;
+}
+
+.finder-item-add-btn:hover {
+  opacity: 1 !important;
+  transform: scale(1.15);
+}
+
 .finder-item svg {
   width: 14px;
   height: 14px;
