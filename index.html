@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XMind to OPML Converter & Visualizer</title>
+    <meta name="description" content="Convertissez vos cartes mentales XMind (.xmind) au format OPML pour vos outils d'outlining (Logseq, OmniOutliner, etc.) et visualisez-les de manière interactive." />
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app">
+      <!-- Header -->
+      <header class="app-header">
+        <div class="header-brand">
+          <svg class="brand-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+            <path d="M12 6v12M6 12h12"/>
+          </svg>
+          <div class="brand-texts">
+            <h1 id="app-title">XMind to OPML Converter</h1>
+            <span class="brand-subtitle">Visualiseur & convertisseur instantané de cartes mentales</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button id="theme-toggle-btn" class="icon-button" aria-label="Changer de thème">
+            <!-- Sun Icon (shown in dark mode) -->
+            <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <!-- Moon Icon (shown in light mode) -->
+            <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+          <span class="app-version">v2.0.0</span>
+        </div>
+      </header>
+
+      <!-- Main Layout -->
+      <main class="app-main">
+        <!-- Toast Notification Area -->
+        <div id="toast-container" class="toast-container"></div>
+
+        <!-- 1. Drag & Drop Upload Zone (Empty State) -->
+        <section id="upload-zone" class="upload-zone">
+          <div class="upload-container">
+            <div class="upload-card">
+              <input type="file" id="file-input" accept=".xmind,.opml" class="file-input-hidden" />
+              <div class="upload-content">
+                <div class="upload-icon-wrapper">
+                  <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </div>
+                <h2>Importer un fichier .xmind ou .opml</h2>
+                <p class="upload-hint-primary">Glissez-déposez votre fichier ici, ou cliquez pour parcourir</p>
+                <p class="upload-hint-secondary">Prend en charge les formats XMind (.xmind) et OPML (.opml)</p>
+                <div style="margin-top: 20px; z-index: 10; position: relative;">
+                  <button id="btn-new-map-upload" class="text-btn" style="font-size: 0.9rem; padding: 6px 12px;">Créer une nouvelle carte vide</button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Recent Cards Dashboard -->
+            <div id="history-section" class="history-section hide">
+              <h3 class="history-title">Continuer l'édition récente</h3>
+              <div id="history-list" class="history-list">
+                <!-- Les cartes récentes seront insérées ici dynamiquement -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Interactive Workspace (Loaded State) -->
+        <section id="workspace-zone" class="workspace-zone hide">
+          <!-- Sidebar -->
+          <aside class="sidebar">
+            <!-- File Info Panel -->
+            <div class="sidebar-section">
+              <h2 class="sidebar-title">FICHIER CHARGÉ</h2>
+              <div class="file-info-box">
+                <div class="file-info-title-row">
+                  <svg class="file-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                  <span id="loaded-file-name" class="file-name">Aucun fichier</span>
+                </div>
+                <span id="loaded-file-size" class="file-size">0 KB</span>
+              </div>
+            </div>
+
+            <!-- Stats Panel -->
+            <div class="sidebar-section">
+              <h2 class="sidebar-title">STATISTIQUES</h2>
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <span class="stat-label">Feuilles</span>
+                  <span id="stat-sheets" class="stat-value color-indigo">0</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">Nœuds</span>
+                  <span id="stat-nodes" class="stat-value color-blue">0</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">Profondeur</span>
+                  <span id="stat-depth" class="stat-value color-teal">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons Panel -->
+            <div class="sidebar-section sidebar-actions">
+              <button id="btn-export-opml" class="btn btn-primary">
+                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Exporter en OPML
+              </button>
+              <button id="btn-new-map" class="btn btn-secondary">
+                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Nouvelle carte
+              </button>
+              <button id="btn-change-file" class="btn btn-secondary">
+                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                Changer de fichier
+              </button>
+            </div>
+          </aside>
+
+          <!-- Tabbed Work Area -->
+          <div class="work-area">
+            <!-- Tabs Navigation -->
+            <nav class="tabs-nav">
+              <button id="tab-btn-tree" class="tab-btn active" data-tab="tab-tree">
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22V12m0 0l-5-5m5 5l5-5M7 7h10"></path>
+                  <circle cx="12" cy="4" r="2"></circle>
+                  <circle cx="5" cy="7" r="2"></circle>
+                  <circle cx="19" cy="7" r="2"></circle>
+                </svg>
+                Visualisation en Arbre
+              </button>
+              <button id="tab-btn-columns" class="tab-btn" data-tab="tab-columns">
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+                  <line x1="15" y1="3" x2="15" y2="21"></line>
+                </svg>
+                Explorateur Colonnes
+              </button>
+              <button id="tab-btn-preview" class="tab-btn" data-tab="tab-preview">
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+                Aperçu OPML / XML
+              </button>
+              <button id="tab-btn-visual" class="tab-btn" data-tab="tab-visual">
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                  <polyline points="2 17 12 22 22 17"></polyline>
+                  <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+                Graphique Interactif
+              </button>
+            </nav>
+
+            <!-- Tabs Content Panels -->
+            <div class="tab-content-container">
+              <!-- Panel 1: Tree View -->
+              <div id="tab-tree" class="tab-panel active">
+                <div class="search-bar-row">
+                  <div class="search-input-wrapper">
+                    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="search-nodes-input" placeholder="Rechercher un sujet..." autocomplete="off" />
+                    <button id="btn-clear-search" class="clear-search-btn hide" aria-label="Effacer la recherche">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                  </div>
+                  <div class="tree-controls">
+                    <button id="btn-expand-all" class="text-btn">Développer tout</button>
+                    <button id="btn-collapse-all" class="text-btn">Réduire tout</button>
+                  </div>
+                </div>
+                <div id="tree-container" class="tree-container">
+                  <!-- Generated interactive tree will be appended here -->
+                </div>
+              </div>
+
+              <!-- Panel 2: Column View -->
+              <div id="tab-columns" class="tab-panel">
+                <div id="column-browser" class="column-browser">
+                  <!-- Generated macOS finder-like columns will be appended here -->
+                </div>
+              </div>
+
+              <!-- Panel 3: OPML Preview -->
+              <div id="tab-preview" class="tab-panel flex-column-panel">
+                <div class="preview-actions-row">
+                  <span class="preview-label">Code source OPML 2.0 généré :</span>
+                  <button id="btn-copy-opml" class="btn btn-secondary btn-sm">
+                    <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Copier le code
+                  </button>
+                </div>
+                <div class="code-editor-container">
+                  <pre><code id="opml-code-preview" class="language-xml"></code></pre>
+                </div>
+              </div>
+
+              <!-- Panel 4: Graphical mindmap canvas -->
+              <div id="tab-visual" class="tab-panel flex-column-panel">
+                <div class="visual-controls-row">
+                  <span class="visual-label">Navigation : Glissez pour déplacer, molette pour zoomer</span>
+                  <div class="visual-actions">
+                    <button id="btn-center-mindmap" class="btn btn-secondary btn-sm">Centrer la carte</button>
+                  </div>
+                </div>
+                <div class="mindmap-canvas-container">
+                  <svg id="mindmap-svg" width="100%" height="100%">
+                    <g id="mindmap-viewport"></g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          <!-- Node Editor Sidebar (Right) -->
+          <aside id="node-editor-sidebar" class="sidebar-right hide">
+            <div class="editor-header">
+              <h2 class="sidebar-title">ÉDITER LE SUJET</h2>
+              <button id="btn-close-editor" class="icon-button" aria-label="Fermer l'éditeur">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            
+            <div class="editor-body">
+              <div class="input-group">
+                <label for="edit-node-title" class="input-label">Texte du sujet</label>
+                <input type="text" id="edit-node-title" class="editor-input" placeholder="Titre du sujet" />
+              </div>
+
+              <div class="input-group">
+                <label for="edit-node-label" class="input-label">Étiquettes / Tags</label>
+                <input type="text" id="edit-node-label" class="editor-input" placeholder="Séparés par des virgules" />
+              </div>
+
+              <div class="input-group">
+                <label for="edit-node-note" class="input-label">Notes / Sous-texte</label>
+                <textarea id="edit-node-note" class="editor-textarea" placeholder="Entrez vos notes ici..."></textarea>
+              </div>
+
+              <div class="editor-separator"></div>
+
+              <div class="editor-actions-vertical">
+                <button id="btn-add-subtopic" class="btn btn-secondary">
+                  <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Ajouter un sous-sujet
+                </button>
+                <button id="btn-delete-node" class="btn btn-secondary color-red-btn">
+                  <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
+                  Supprimer ce sujet
+                </button>
+              </div>
+            </div>
+          </aside>
+        </section>
+      </main>
+
+      <!-- Loading Overlay -->
+      <div id="loading-overlay" class="loading-overlay hide">
+        <div class="loading-card">
+          <div class="hourglass-wrapper">
+            <svg class="hourglass-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 2h14M5 22h14"></path>
+              <path d="M19 2v4c0 1.38-1.13 2.5-2.52 3L12 12l-4.48-3A3.01 3.01 0 0 1 5 6V2"></path>
+              <path d="M12 12l4.48 3a3.01 3.01 0 0 1 2.52 3v4H5v-4c0-1.38 1.13-2.5 2.52-3L12 12z"></path>
+            </svg>
+          </div>
+          <h2>Traitement en cours...</h2>
+          <p id="loading-percentage" class="loading-percentage"></p>
+          <p class="loading-hint">Lecture, décompression et analyse de votre fichier XMind volumineux</p>
+        </div>
+      </div>
+    </div>
+    <!-- Script entry point -->
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
