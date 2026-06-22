@@ -1122,10 +1122,9 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
 }
 
 // -------------------------------------------------------------
-// LOCALSTORAGE HISTORY MANAGER
-// Uses a two-key approach to avoid localStorage quota overflow:
-//   - 'xmind_history_index': lightweight array of metadata (id, fileName, etc.)
-//   - 'xmind_data_<id>': full sheets JSON for each entry
+// HISTORY MANAGER — IndexedDB for data, localStorage for index
+// IndexedDB has no practical size limit (hundreds of MB)
+// localStorage is only used for the tiny metadata index
 // -------------------------------------------------------------
 interface HistoryIndexEntry {
   id: string;
@@ -1134,60 +1133,71 @@ interface HistoryIndexEntry {
   lastModified: number;
 }
 
+// --- IndexedDB helpers ---
+const IDB_NAME = 'mindmap_storage';
+const IDB_VERSION = 1;
+const IDB_STORE = 'sheets';
+
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbSaveSheets(id: string, sheets: MindmapSheet[]): Promise<void> {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(sheets, id);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function idbLoadSheets(id: string): Promise<MindmapSheet[] | null> {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(id);
+    req.onsuccess = () => { db.close(); resolve(req.result ?? null); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+}
+
+async function idbDeleteSheets(id: string): Promise<void> {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+// --- Lightweight index in localStorage ---
 function getHistoryIndex(): HistoryIndexEntry[] {
   try {
     const data = localStorage.getItem('xmind_history_index');
-    if (!data) {
-      // Migration: try reading old key
-      const oldData = localStorage.getItem('xmind_to_opml_history');
-      if (oldData) {
-        const oldHistory = JSON.parse(oldData) as HistoryEntry[];
-        const migrated: HistoryIndexEntry[] = [];
-        for (const entry of oldHistory) {
-          if (entry && typeof entry.id === 'string' && typeof entry.fileName === 'string') {
-            migrated.push({
-              id: entry.id,
-              fileName: entry.fileName,
-              fileSizeText: entry.fileSizeText || '',
-              lastModified: entry.lastModified || 0
-            });
-            try {
-              localStorage.setItem('xmind_data_' + entry.id, JSON.stringify(entry.sheets));
-            } catch (_e) { /* ignore quota for migration */ }
-          }
-        }
-        localStorage.setItem('xmind_history_index', JSON.stringify(migrated));
-        localStorage.removeItem('xmind_to_opml_history');
-        return migrated;
-      }
-      return [];
-    }
+    if (!data) return [];
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
-    // Validate each entry
     return parsed.filter((e: any) =>
       e && typeof e.id === 'string' && typeof e.fileName === 'string'
       && typeof e.lastModified === 'number'
     );
   } catch (e) {
-    console.error("Error reading history index from localStorage:", e);
+    console.error("Error reading history index:", e);
     return [];
   }
 }
-
-function getHistorySheets(id: string): MindmapSheet[] | null {
-  try {
-    const data = localStorage.getItem('xmind_data_' + id);
-    if (!data) return null;
-    const sheets = JSON.parse(data);
-    if (!Array.isArray(sheets)) return null;
-    return sheets;
-  } catch (e) {
-    console.error("Error reading history sheets from localStorage:", e);
-    return null;
-  }
-}
-
 
 function writeHistoryIndex(index: HistoryIndexEntry[]) {
   try {
@@ -1197,7 +1207,51 @@ function writeHistoryIndex(index: HistoryIndexEntry[]) {
   }
 }
 
-function saveCurrentToHistory() {
+// --- Migration from old localStorage formats ---
+async function migrateOldHistory() {
+  // 1. Migrate from old single-key format (v0.0.8 and earlier)
+  const oldData = localStorage.getItem('xmind_to_opml_history');
+  if (oldData) {
+    try {
+      const oldHistory = JSON.parse(oldData) as HistoryEntry[];
+      const migrated: HistoryIndexEntry[] = [];
+      for (const entry of oldHistory) {
+        if (entry && typeof entry.id === 'string' && typeof entry.fileName === 'string' && Array.isArray(entry.sheets)) {
+          migrated.push({
+            id: entry.id,
+            fileName: entry.fileName,
+            fileSizeText: entry.fileSizeText || '',
+            lastModified: entry.lastModified || 0
+          });
+          await idbSaveSheets(entry.id, entry.sheets);
+        }
+      }
+      writeHistoryIndex(migrated);
+    } catch (e) {
+      console.error("Migration from old history format failed:", e);
+    }
+    localStorage.removeItem('xmind_to_opml_history');
+  }
+
+  // 2. Migrate from split-localStorage format (v0.0.10 intermediate)
+  const index = getHistoryIndex();
+  for (const entry of index) {
+    const lsKey = 'xmind_data_' + entry.id;
+    const lsData = localStorage.getItem(lsKey);
+    if (lsData) {
+      try {
+        const sheets = JSON.parse(lsData);
+        if (Array.isArray(sheets)) {
+          await idbSaveSheets(entry.id, sheets);
+        }
+      } catch (_e) { /* skip corrupted */ }
+      localStorage.removeItem(lsKey);
+    }
+  }
+}
+
+// --- Core history operations ---
+async function saveCurrentToHistory() {
   if (state.sheets.length === 0) return;
   
   if (!state.activeHistoryId) {
@@ -1211,36 +1265,11 @@ function saveCurrentToHistory() {
     lastModified: Date.now()
   };
 
-  // Save the sheets data separately
-  let dataSaved = false;
-  const dataKey = 'xmind_data_' + indexEntry.id;
-  const sheetsJson = JSON.stringify(state.sheets);
-
   try {
-    localStorage.setItem(dataKey, sheetsJson);
-    dataSaved = true;
-  } catch (_e) {
-    // Quota exceeded — clean oldest entries to make space
-    console.warn("localStorage quota exceeded for sheets data. Cleaning oldest entries.");
-    const currentIndex = getHistoryIndex();
-    // Remove oldest entries (at the end), skipping the current entry if it already exists
-    const candidates = currentIndex.filter(h => h.id !== indexEntry.id);
-    while (candidates.length > 0) {
-      const oldest = candidates.pop()!;
-      localStorage.removeItem('xmind_data_' + oldest.id);
-      try {
-        localStorage.setItem(dataKey, sheetsJson);
-        dataSaved = true;
-        break;
-      } catch (_e2) {
-        // Continue removing older entries
-      }
-    }
-  }
-
-  if (!dataSaved) {
-    console.warn("Could not save sheets to localStorage — data too large.");
-    showToast("Carte trop volumineuse pour la sauvegarde locale automatique. Utilisez « Exporter en OPML » pour sauvegarder manuellement.", 'error');
+    await idbSaveSheets(indexEntry.id, state.sheets);
+  } catch (e) {
+    console.error("Failed to save sheets to IndexedDB:", e);
+    showToast("Erreur lors de la sauvegarde automatique.", 'error');
     return;
   }
 
@@ -1255,11 +1284,10 @@ function saveCurrentToHistory() {
 
   index.sort((a, b) => b.lastModified - a.lastModified);
 
-  // Keep max 10 entries, clean removed entries' data
   if (index.length > 10) {
     const removed = index.splice(10);
     for (const r of removed) {
-      localStorage.removeItem('xmind_data_' + r.id);
+      idbDeleteSheets(r.id).catch(() => {});
     }
   }
 
@@ -1267,13 +1295,13 @@ function saveCurrentToHistory() {
   renderHistoryList();
 }
 
-function deleteHistoryEntry(id: string, e: Event) {
+async function deleteHistoryEntry(id: string, e: Event) {
   e.stopPropagation();
   if (confirm("Voulez-vous vraiment supprimer cette carte de l'historique ?")) {
     let index = getHistoryIndex();
     index = index.filter(h => h.id !== id);
     writeHistoryIndex(index);
-    localStorage.removeItem('xmind_data_' + id);
+    await idbDeleteSheets(id).catch(() => {});
     
     if (state.activeHistoryId === id) {
       state.activeHistoryId = null;
@@ -1284,12 +1312,16 @@ function deleteHistoryEntry(id: string, e: Event) {
   }
 }
 
-function loadHistoryEntry(entry: HistoryEntry) {
-  // Load full sheets data from separate localStorage key
-  const sheets = getHistorySheets(entry.id);
+async function loadHistoryEntry(entry: HistoryIndexEntry) {
+  let sheets: MindmapSheet[] | null = null;
+  try {
+    sheets = await idbLoadSheets(entry.id);
+  } catch (e) {
+    console.error("Failed to load sheets from IndexedDB:", e);
+  }
+
   if (!sheets || sheets.length === 0) {
     showToast("Impossible de restaurer cette carte (données manquantes).", 'error');
-    // Clean up broken entry
     let index = getHistoryIndex();
     index = index.filter(h => h.id !== entry.id);
     writeHistoryIndex(index);
@@ -1328,15 +1360,7 @@ function renderHistoryList() {
 
   const index = getHistoryIndex();
 
-  // Filter out orphan entries whose sheet data is missing
-  const validEntries = index.filter(entry => localStorage.getItem('xmind_data_' + entry.id) !== null);
-
-  // Clean up orphans from index if any were found
-  if (validEntries.length !== index.length) {
-    writeHistoryIndex(validEntries);
-  }
-
-  if (validEntries.length === 0) {
+  if (index.length === 0) {
     historySection?.classList.add('hide');
     return;
   }
@@ -1344,7 +1368,7 @@ function renderHistoryList() {
   historySection?.classList.remove('hide');
   historyList.innerHTML = "";
 
-  validEntries.forEach(entry => {
+  index.forEach(entry => {
     const isOpml = entry.fileName.toLowerCase().endsWith('.opml');
     const badgeText = isOpml ? 'OPML' : 'XMIND';
     const badgeClass = isOpml ? 'badge-opml' : 'badge-xmind';
@@ -1383,7 +1407,7 @@ function renderHistoryList() {
     `;
 
     card.addEventListener('click', () => {
-      loadHistoryEntry({ id: entry.id, fileName: entry.fileName, fileSizeText: entry.fileSizeText, lastModified: entry.lastModified, sheets: [] });
+      loadHistoryEntry(entry);
     });
 
     const deleteBtn = card.querySelector('.history-card-delete');
@@ -1404,7 +1428,6 @@ function triggerAutoSave() {
     saveCurrentToHistory();
   }, 1000);
 }
-
 // -------------------------------------------------------------
 // CORE XMIND LOADER
 // -------------------------------------------------------------
@@ -1824,8 +1847,11 @@ function centerSvgMindmap() {
 // -------------------------------------------------------------
 // EVENT HANDLERS & INITIALIZATION
 // -------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-  // Render history list from localStorage if any entries exist
+document.addEventListener('DOMContentLoaded', async () => {
+  // Migrate old localStorage history formats to IndexedDB
+  await migrateOldHistory();
+
+  // Render history list from index
   renderHistoryList();
 
   // Flush pending auto-saves immediately if the user closes/reloads the page
