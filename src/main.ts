@@ -1716,6 +1716,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Render history list from localStorage if any entries exist
   renderHistoryList();
 
+  // Flush pending auto-saves immediately if the user closes/reloads the page
+  window.addEventListener('beforeunload', () => {
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+      saveCurrentToHistory();
+    }
+  });
+
   // Theme Switching
   const html = document.documentElement;
   const themeBtn = document.getElementById('theme-toggle-btn');
@@ -1766,10 +1774,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Change File Button
   document.getElementById('btn-change-file')?.addEventListener('click', () => {
-    // Reset state & file input
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+    }
+    saveCurrentToHistory();
+
     if (fileInput) fileInput.value = "";
     document.getElementById('workspace-zone')!.classList.add('hide');
     document.getElementById('upload-zone')!.classList.remove('hide');
+    renderHistoryList();
+  });
+
+  // Save and Close Button
+  document.getElementById('btn-save-close')?.addEventListener('click', () => {
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+    }
+    saveCurrentToHistory();
+
+    if (fileInput) fileInput.value = "";
+    document.getElementById('workspace-zone')!.classList.add('hide');
+    document.getElementById('upload-zone')!.classList.remove('hide');
+    renderHistoryList();
+
+    showToast("Carte enregistrée et fermée.");
   });
 
   // Export OPML Button
