@@ -1621,25 +1621,29 @@ function updateSvgViewport() {
 }
 
 // Rebuild the SVG graphics from state
-function buildSvgMindmap() {
+function buildSvgMindmap(skipDepthReset = false) {
   const viewport = document.getElementById('mindmap-viewport');
   if (!viewport || state.sheets.length === 0) return;
   viewport.innerHTML = "";
 
-  // Set default collapsed state for deep nodes if not set yet
-  const initCollapsed = (node: SvgLayoutNode, depth: number) => {
-    if (node._collapsed === undefined) {
-      node._collapsed = depth >= 2;
-    }
-    if (node.topics) {
-      for (const sub of node.topics) {
-        initCollapsed(sub, depth + 1);
-      }
-    }
-  };
+  // Read the max visible depth from the selector
+  const depthSelect = document.getElementById('svg-depth-select') as HTMLSelectElement;
+  const maxVisibleDepth = depthSelect ? parseInt(depthSelect.value, 10) : 2;
 
-  for (const sheet of state.sheets) {
-    initCollapsed(sheet.topic, 0);
+  if (!skipDepthReset) {
+    // Force collapsed state based on max depth
+    const setCollapsedByDepth = (node: SvgLayoutNode, depth: number) => {
+      node._collapsed = depth >= maxVisibleDepth;
+      if (node.topics) {
+        for (const sub of node.topics) {
+          setCollapsedByDepth(sub, depth + 1);
+        }
+      }
+    };
+
+    for (const sheet of state.sheets) {
+      setCollapsedByDepth(sheet.topic, 0);
+    }
   }
 
   // Multi-sheet spacing
@@ -1762,7 +1766,7 @@ function buildSvgMindmap() {
         toggleBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           n._collapsed = !n._collapsed;
-          buildSvgMindmap();
+          buildSvgMindmap(true); // Skip depth reset to respect manual toggle
         });
 
         g.appendChild(toggleBtn);
@@ -2061,6 +2065,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Mindmap SVG Center Button
   document.getElementById('btn-center-mindmap')?.addEventListener('click', () => {
+    centerSvgMindmap();
+  });
+
+  // Depth selector for SVG visual
+  document.getElementById('svg-depth-select')?.addEventListener('change', () => {
+    buildSvgMindmap();
     centerSvgMindmap();
   });
 

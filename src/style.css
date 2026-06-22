@@ -1283,6 +1283,29 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
 }
 
+.visual-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.depth-select {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-normal);
+}
+
+.depth-select:hover,
+.depth-select:focus {
+  border-color: var(--color-primary);
+}
+
 .mindmap-canvas-container {
   flex-grow: 1;
   background-color: var(--bg-panel);
