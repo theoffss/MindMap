@@ -18,7 +18,18 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  let filePath = path.join(DIST_DIR, req.url === '/' ? 'index.html' : req.url);
+  // Extract path without query parameters
+  const urlPath = req.url.split('?')[0];
+  let decodedUrl;
+  try {
+    decodedUrl = decodeURIComponent(urlPath);
+  } catch (e) {
+    res.statusCode = 400;
+    res.end('Bad Request: Malformed URI');
+    return;
+  }
+
+  let filePath = path.join(DIST_DIR, decodedUrl === '/' ? 'index.html' : decodedUrl);
 
   // Prevent directory traversal
   if (!filePath.startsWith(DIST_DIR)) {

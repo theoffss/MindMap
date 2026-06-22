@@ -179,10 +179,11 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
     ? `<svg class="toast-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
     : `<svg class="toast-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
 
-  toast.innerHTML = `
-    ${iconSvg}
-    <span class="toast-text">${message}</span>
-  `;
+  toast.innerHTML = iconSvg;
+  const textSpan = document.createElement('span');
+  textSpan.className = 'toast-text';
+  textSpan.textContent = message;
+  toast.appendChild(textSpan);
 
   container.appendChild(toast);
 
@@ -1249,6 +1250,11 @@ function renderHistoryList() {
       minute: '2-digit'
     });
 
+    const escapedFileName = escapeXml(entry.fileName);
+    const displayName = entry.fileName.replace(/\.(xmind|opml)$/i, '');
+    const escapedDisplayName = escapeXml(displayName);
+    const escapedFileSizeText = escapeXml(entry.fileSizeText);
+
     const card = document.createElement('div');
     card.className = 'history-card';
     card.innerHTML = `
@@ -1259,13 +1265,13 @@ function renderHistoryList() {
         </svg>
       </button>
       <div class="history-card-info">
-        <h4 class="history-card-title" title="${entry.fileName}">${entry.fileName.replace(/\.(xmind|opml)$/i, '')}</h4>
+        <h4 class="history-card-title" title="${escapedFileName}">${escapedDisplayName}</h4>
       </div>
       <div class="history-card-meta">
         <span class="history-card-date">${dateStr}</span>
         <div class="history-card-badge-row">
           <span class="history-card-badge ${badgeClass}">${badgeText}</span>
-          <span class="history-card-date">${entry.fileSizeText}</span>
+          <span class="history-card-date">${escapedFileSizeText}</span>
         </div>
       </div>
     `;
