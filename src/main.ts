@@ -1687,6 +1687,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const uploadCard = document.querySelector('.upload-card');
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
 
+  uploadCard?.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('#btn-new-map-upload')) return;
+    if (fileInput) fileInput.click();
+  });
+
   uploadCard?.addEventListener('dragover', (e) => {
     e.preventDefault();
     uploadCard.classList.add('drag-over');
