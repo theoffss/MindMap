@@ -17,7 +17,25 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
+// Security headers applied to every response
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '0',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'"
+};
+
+function setSecurityHeaders(res) {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    res.setHeader(key, value);
+  }
+}
+
 const server = http.createServer((req, res) => {
+  setSecurityHeaders(res);
+
   // Extract path without query parameters
   const urlPath = req.url.split('?')[0];
   let decodedUrl;
@@ -25,7 +43,7 @@ const server = http.createServer((req, res) => {
     decodedUrl = decodeURIComponent(urlPath);
   } catch (e) {
     res.statusCode = 400;
-    res.end('Bad Request: Malformed URI');
+    res.end('Bad Request');
     return;
   }
 
@@ -48,15 +66,16 @@ const server = http.createServer((req, res) => {
         fs.readFile(path.join(DIST_DIR, 'index.html'), (errIndex, contentIndex) => {
           if (errIndex) {
             res.statusCode = 500;
-            res.end('Error loading index.html');
+            res.end('Internal Server Error');
           } else {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(contentIndex, 'utf-8');
           }
         });
       } else {
+        console.error('File read error:', err.code, filePath);
         res.statusCode = 500;
-        res.end(`Server Error: ${err.code}`);
+        res.end('Internal Server Error');
       }
     } else {
       res.writeHead(200, { 'Content-Type': contentType });

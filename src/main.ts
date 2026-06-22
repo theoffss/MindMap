@@ -1123,29 +1123,87 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
 
 // -------------------------------------------------------------
 // LOCALSTORAGE HISTORY MANAGER
+// Uses a two-key approach to avoid localStorage quota overflow:
+//   - 'xmind_history_index': lightweight array of metadata (id, fileName, etc.)
+//   - 'xmind_data_<id>': full sheets JSON for each entry
 // -------------------------------------------------------------
-function getHistory(): HistoryEntry[] {
+interface HistoryIndexEntry {
+  id: string;
+  fileName: string;
+  fileSizeText: string;
+  lastModified: number;
+}
+
+function getHistoryIndex(): HistoryIndexEntry[] {
   try {
-    const data = localStorage.getItem('xmind_to_opml_history');
-    return data ? JSON.parse(data) : [];
+    const data = localStorage.getItem('xmind_history_index');
+    if (!data) {
+      // Migration: try reading old key
+      const oldData = localStorage.getItem('xmind_to_opml_history');
+      if (oldData) {
+        const oldHistory = JSON.parse(oldData) as HistoryEntry[];
+        const migrated: HistoryIndexEntry[] = [];
+        for (const entry of oldHistory) {
+          if (entry && typeof entry.id === 'string' && typeof entry.fileName === 'string') {
+            migrated.push({
+              id: entry.id,
+              fileName: entry.fileName,
+              fileSizeText: entry.fileSizeText || '',
+              lastModified: entry.lastModified || 0
+            });
+            try {
+              localStorage.setItem('xmind_data_' + entry.id, JSON.stringify(entry.sheets));
+            } catch (_e) { /* ignore quota for migration */ }
+          }
+        }
+        localStorage.setItem('xmind_history_index', JSON.stringify(migrated));
+        localStorage.removeItem('xmind_to_opml_history');
+        return migrated;
+      }
+      return [];
+    }
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    // Validate each entry
+    return parsed.filter((e: any) =>
+      e && typeof e.id === 'string' && typeof e.fileName === 'string'
+      && typeof e.lastModified === 'number'
+    );
   } catch (e) {
-    console.error("Error reading history from localStorage:", e);
+    console.error("Error reading history index from localStorage:", e);
     return [];
   }
 }
 
-function writeHistoryToLocalStorage(history: HistoryEntry[]) {
-  let success = false;
-  let attempts = 0;
-  while (!success && history.length > 0 && attempts < 10) {
-    try {
-      localStorage.setItem('xmind_to_opml_history', JSON.stringify(history));
-      success = true;
-    } catch (e) {
-      console.warn("localStorage quota exceeded, removing oldest history item.");
-      history.pop();
-      attempts++;
-    }
+function getHistorySheets(id: string): MindmapSheet[] | null {
+  try {
+    const data = localStorage.getItem('xmind_data_' + id);
+    if (!data) return null;
+    const sheets = JSON.parse(data);
+    if (!Array.isArray(sheets)) return null;
+    return sheets;
+  } catch (e) {
+    console.error("Error reading history sheets from localStorage:", e);
+    return null;
+  }
+}
+
+function getHistory(): HistoryEntry[] {
+  const index = getHistoryIndex();
+  return index.map(entry => ({
+    id: entry.id,
+    fileName: entry.fileName,
+    fileSizeText: entry.fileSizeText,
+    lastModified: entry.lastModified,
+    sheets: [] // Sheets are loaded on-demand, not eagerly
+  }));
+}
+
+function writeHistoryIndex(index: HistoryIndexEntry[]) {
+  try {
+    localStorage.setItem('xmind_history_index', JSON.stringify(index));
+  } catch (e) {
+    console.warn("localStorage quota exceeded for history index.");
   }
 }
 
@@ -1156,39 +1214,63 @@ function saveCurrentToHistory() {
     state.activeHistoryId = Date.now().toString() + "_" + Math.random().toString(36).substr(2, 9);
   }
 
-  const entry: HistoryEntry = {
+  const indexEntry: HistoryIndexEntry = {
     id: state.activeHistoryId,
     fileName: state.fileName,
     fileSizeText: state.fileSizeText,
-    lastModified: Date.now(),
-    sheets: state.sheets
+    lastModified: Date.now()
   };
 
-  let history = getHistory();
-  const index = history.findIndex(h => h.id === entry.id);
+  // Save the sheets data separately
+  try {
+    localStorage.setItem('xmind_data_' + indexEntry.id, JSON.stringify(state.sheets));
+  } catch (e) {
+    console.warn("localStorage quota exceeded for sheets data. Cleaning oldest entries.");
+    // Clean oldest entries to make space
+    let index = getHistoryIndex();
+    while (index.length > 0) {
+      const oldest = index.pop()!;
+      localStorage.removeItem('xmind_data_' + oldest.id);
+      writeHistoryIndex(index);
+      try {
+        localStorage.setItem('xmind_data_' + indexEntry.id, JSON.stringify(state.sheets));
+        break;
+      } catch (_e) {
+        // Continue removing older entries
+      }
+    }
+  }
 
-  if (index !== -1) {
-    history[index] = entry;
+  let index = getHistoryIndex();
+  const existingIdx = index.findIndex(h => h.id === indexEntry.id);
+
+  if (existingIdx !== -1) {
+    index[existingIdx] = indexEntry;
   } else {
-    history.unshift(entry);
+    index.unshift(indexEntry);
   }
 
-  history.sort((a, b) => b.lastModified - a.lastModified);
+  index.sort((a, b) => b.lastModified - a.lastModified);
 
-  if (history.length > 10) {
-    history = history.slice(0, 10);
+  // Keep max 10 entries, clean removed entries' data
+  if (index.length > 10) {
+    const removed = index.splice(10);
+    for (const r of removed) {
+      localStorage.removeItem('xmind_data_' + r.id);
+    }
   }
 
-  writeHistoryToLocalStorage(history);
+  writeHistoryIndex(index);
   renderHistoryList();
 }
 
 function deleteHistoryEntry(id: string, e: Event) {
   e.stopPropagation();
   if (confirm("Voulez-vous vraiment supprimer cette carte de l'historique ?")) {
-    let history = getHistory();
-    history = history.filter(h => h.id !== id);
-    writeHistoryToLocalStorage(history);
+    let index = getHistoryIndex();
+    index = index.filter(h => h.id !== id);
+    writeHistoryIndex(index);
+    localStorage.removeItem('xmind_data_' + id);
     
     if (state.activeHistoryId === id) {
       state.activeHistoryId = null;
@@ -1200,10 +1282,22 @@ function deleteHistoryEntry(id: string, e: Event) {
 }
 
 function loadHistoryEntry(entry: HistoryEntry) {
+  // Load full sheets data from separate localStorage key
+  const sheets = getHistorySheets(entry.id);
+  if (!sheets || sheets.length === 0) {
+    showToast("Impossible de restaurer cette carte (données manquantes).", 'error');
+    // Clean up broken entry
+    let index = getHistoryIndex();
+    index = index.filter(h => h.id !== entry.id);
+    writeHistoryIndex(index);
+    renderHistoryList();
+    return;
+  }
+
   state.fileName = entry.fileName;
   state.fileSizeText = entry.fileSizeText;
-  state.sheets = entry.sheets;
-  state.opmlString = dictToOpml(entry.sheets);
+  state.sheets = sheets;
+  state.opmlString = dictToOpml(sheets);
   state.activeHistoryId = entry.id;
 
   document.getElementById('loaded-file-name')!.textContent = state.fileName;
@@ -1750,7 +1844,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   uploadCard?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    // Ignore clicks on the "new map" button and on the file input itself
+    // (the hidden file input covers the card; clicking it opens the picker
+    //  AND bubbles to this handler which would call .click() again)
     if (target.closest('#btn-new-map-upload')) return;
+    if (target === fileInput || target.closest('.file-input-hidden')) return;
     if (fileInput) fileInput.click();
   });
 
