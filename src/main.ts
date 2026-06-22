@@ -2132,6 +2132,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Export subtopic as OPML
+  document.getElementById('btn-export-subtopic')?.addEventListener('click', () => {
+    if (!selectedNode) return;
+
+    // Build an OPML from the selected node as root
+    const subtopicSheet: MindmapSheet = {
+      title: selectedNode.title || "Export",
+      topic: selectedNode
+    };
+    const opmlStr = dictToOpml([subtopicSheet]);
+
+    // Generate a safe filename from the node title
+    const safeName = (selectedNode.title || "export")
+      .replace(/[^a-zA-Z0-9àâäéèêëïîôùûüçæœÀÂÄÉÈÊËÏÎÔÙÛÜÇÆŒ _-]/g, '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .substring(0, 60) || "export";
+
+    const blob = new Blob([opmlStr], { type: "text/xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeName}.opml`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Branche "${selectedNode.title}" exportée en OPML !`);
+  });
+
   // Nouvelle Carte Logic
   const createNewMap = () => {
     state.activeHistoryId = Date.now().toString() + "_" + Math.random().toString(36).substr(2, 9);
