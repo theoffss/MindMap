@@ -778,13 +778,60 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
 
   const ancestors = selectedNode ? getNodeAncestors(selectedNode) : [];
 
-  const createColumn = (title: string): HTMLElement => {
+  const createColumn = (title: string, node?: MindmapNode): HTMLElement => {
     const colDiv = document.createElement('div');
     colDiv.className = 'finder-column';
     
     const header = document.createElement('div');
-    header.className = 'finder-column-header';
-    header.textContent = title;
+    const isSelected = node && selectedNode === node;
+    header.className = `finder-column-header ${node ? 'clickable-header' : ''} ${isSelected ? 'active-header' : ''}`;
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'column-header-title';
+    titleSpan.textContent = title;
+    header.appendChild(titleSpan);
+
+    if (node) {
+      const addBtn = document.createElement('button');
+      addBtn.className = 'column-add-btn';
+      addBtn.title = "Ajouter un sous-sujet";
+      addBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      `;
+      
+      addBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        
+        if (!node.topics) {
+          node.topics = [];
+        }
+        const newNode: MindmapNode = {
+          title: "Nouveau sous-sujet",
+          _collapsed: false
+        };
+        node.topics.push(newNode);
+        node._collapsed = false;
+        
+        selectNode(newNode);
+        refreshAllViews();
+        
+        const editTitleInput = document.getElementById('edit-node-title') as HTMLInputElement;
+        editTitleInput?.focus();
+        editTitleInput?.select();
+      });
+      
+      header.appendChild(addBtn);
+
+      header.addEventListener('click', () => {
+        browser.querySelectorAll('.finder-column-header').forEach(h => h.classList.remove('active-header'));
+        header.classList.add('active-header');
+        selectNode(node);
+      });
+    }
+
     colDiv.appendChild(header);
 
     const list = document.createElement('div');
@@ -889,7 +936,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
     const hasChildren = node.topics && node.topics.length > 0;
 
     if (hasChildren && node.topics) {
-      const subList = createColumn(node.title);
+      const subList = createColumn(node.title, node);
       for (const sub of node.topics) {
         const subColIndex = parentColIndex + 1;
         const subInPath = ancestors.includes(sub) || selectedNode === sub;
@@ -951,7 +998,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
       
       if (hasChildren && node.topics) {
         const nextColIndex = currentColIdx + 1;
-        const subList = createColumn(node.title);
+        const subList = createColumn(node.title, node);
         for (const sub of node.topics) {
           const inPath = ancestors.includes(sub) || selectedNode === sub;
           const btn = createItemButton(sub, i + 1, inPath, () => {
@@ -992,7 +1039,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
     }
   } else if (sheets.length === 1) {
     const rootTopic = sheets[0].topic;
-    const list = createColumn(rootTopic.title || "Sujet Central");
+    const list = createColumn(rootTopic.title || "Sujet Central", rootTopic);
     
     if (rootTopic.topics && rootTopic.topics.length > 0) {
       for (const child of rootTopic.topics) {
@@ -1022,7 +1069,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
         
         if (hasChildren && node.topics) {
           const nextColIndex = currentColIdx + 1;
-          const subList = createColumn(node.title);
+          const subList = createColumn(node.title, node);
           for (const sub of node.topics) {
             const inPath = ancestors.includes(sub) || selectedNode === sub;
             const btn = createItemButton(sub, i, inPath, () => {

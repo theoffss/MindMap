@@ -994,6 +994,11 @@ h1, h2, h3, h4, h5, h6 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  transition: all var(--transition-fast);
 }
 
 .finder-column-list {
@@ -1347,13 +1352,10 @@ h1, h2, h3, h4, h5, h6 {
   stroke-width: 1.5px;
 }
 
-/* Sidebar Right (Editor) */
 .sidebar-right {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
+  position: relative;
   width: 320px;
+  flex-shrink: 0;
   border-left: 1px solid var(--border-color);
   background-color: var(--bg-surface);
   padding: var(--spacing-lg) var(--spacing-md);
@@ -1476,6 +1478,10 @@ h1, h2, h3, h4, h5, h6 {
 /* Adjust responsiveness for mobile screens */
 @media (max-width: 600px) {
   .sidebar-right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
     width: 100%;
   }
 }
@@ -1638,6 +1644,55 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .history-card-delete svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Clickable and Active Column Headers in finder */
+.finder-column-header.clickable-header {
+  cursor: pointer;
+}
+
+.finder-column-header.clickable-header:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.finder-column-header.active-header {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.column-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-grow: 1;
+}
+
+.column-add-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.column-add-btn:hover {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.column-add-btn svg {
   width: 12px;
   height: 12px;
 }
