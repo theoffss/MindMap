@@ -416,6 +416,17 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.8rem;
 }
 
+.upload-new-map-wrapper {
+  margin-top: 20px;
+  z-index: 10;
+  position: relative;
+}
+
+.btn-new-map-upload {
+  font-size: 0.9rem;
+  padding: 6px 12px;
+}
+
 /* Workspace Layout (Loaded State) */
 .workspace-zone {
   display: flex;
@@ -579,6 +590,16 @@ h1, h2, h3, h4, h5, h6 {
   padding: var(--spacing-sm) var(--spacing-md);
   font-size: 0.8rem;
   width: auto;
+}
+
+.btn-success {
+  background-color: var(--color-green);
+  border-color: var(--color-green);
+  color: #ffffff;
+}
+
+.btn-success:hover {
+  background-color: #047857;
 }
 
 .text-btn {
@@ -976,10 +997,10 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: fadeIn var(--transition-normal);
+  animation: fadeInSlide var(--transition-normal);
 }
 
-@keyframes fadeIn {
+@keyframes fadeInSlide {
   from { opacity: 0; transform: translateX(8px); }
   to { opacity: 1; transform: translateX(0); }
 }
@@ -1315,6 +1336,10 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
 }
 
+.label-depth {
+  margin-right: 4px;
+}
+
 .visual-actions {
   display: flex;
   align-items: center;
@@ -1457,7 +1482,7 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.05em;
 }
 
-.editor-input {
+.editor-field {
   width: 100%;
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
@@ -1466,33 +1491,18 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-primary);
   font-family: var(--font-family-sans);
   font-size: 0.85rem;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.editor-input:focus {
+.editor-field:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--color-primary-light);
 }
 
 .editor-textarea {
-  width: 100%;
   height: 150px;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  color: var(--text-primary);
-  font-family: var(--font-family-sans);
-  font-size: 0.85rem;
   resize: vertical;
-  transition: all var(--transition-fast);
-}
-
-.editor-textarea:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-primary-light);
 }
 
 .editor-separator {

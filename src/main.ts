@@ -8,6 +8,7 @@ interface MindmapNode {
   note?: string;
   label?: string;
   _collapsed?: boolean;
+  _originalNode?: MindmapNode;
 }
 
 interface MindmapSheet {
@@ -37,6 +38,12 @@ const state = {
 // Active Selection variables
 let selectedNode: MindmapNode | null = null;
 
+// Helper to check if a node is the currently selected node (handles filtered copies)
+function isSelected(n: MindmapNode | null): boolean {
+  if (!n || !selectedNode) return false;
+  return selectedNode === n || selectedNode === n._originalNode;
+}
+
 // Helper to find the parent of a node recursively
 function findParentNode(sheets: MindmapSheet[], targetNode: MindmapNode): MindmapNode | null {
   let foundParent: MindmapNode | null = null;
@@ -64,7 +71,8 @@ function findParentNode(sheets: MindmapSheet[], targetNode: MindmapNode): Mindma
 
 // Function to select a node and populate the editor sidebar
 function selectNode(node: MindmapNode) {
-  selectedNode = node;
+  // If we selected a filtered copy, resolve to the original node
+  selectedNode = node._originalNode || node;
   const parentNode = findParentNode(state.sheets, node);
 
   // Open the sidebar
@@ -118,6 +126,7 @@ function rebuildActiveView() {
   } else if (state.activeTab === 'tab-columns') {
     renderColumnBrowser(state.sheets);
   } else if (state.activeTab === 'tab-preview') {
+    ensureOpmlFresh();
     const previewContainer = document.getElementById('opml-code-preview');
     if (previewContainer) {
       if (state.opmlString.length > 150 * 1024) {
@@ -132,22 +141,44 @@ function rebuildActiveView() {
   }
 }
 
+// Cached stat DOM elements (populated on first call)
+let _statSheets: HTMLElement | null = null;
+let _statNodes: HTMLElement | null = null;
+let _statDepth: HTMLElement | null = null;
+let _opmlDirty = true; // Flag: OPML string needs regeneration
+
 // Function to refresh the active view with updated data model state
 function refreshAllViews() {
-  // Regenerate OPML String
-  state.opmlString = dictToOpml(state.sheets);
+  _opmlDirty = true; // Mark OPML as stale (regenerated lazily)
 
   // Re-calculate stats
   const stats = getMapStats(state.sheets);
-  const sheetsEl = document.getElementById('stat-sheets');
-  const nodesEl = document.getElementById('stat-nodes');
-  const depthEl = document.getElementById('stat-depth');
-  if (sheetsEl) sheetsEl.textContent = stats.sheetsCount.toString();
-  if (nodesEl) nodesEl.textContent = stats.totalNodes.toString();
-  if (depthEl) depthEl.textContent = stats.maxDepth.toString();
+  if (!_statSheets) _statSheets = document.getElementById('stat-sheets');
+  if (!_statNodes) _statNodes = document.getElementById('stat-nodes');
+  if (!_statDepth) _statDepth = document.getElementById('stat-depth');
+  if (_statSheets) _statSheets.textContent = stats.sheetsCount.toString();
+  if (_statNodes) _statNodes.textContent = stats.totalNodes.toString();
+  if (_statDepth) _statDepth.textContent = stats.maxDepth.toString();
 
   rebuildActiveView();
   triggerAutoSave();
+}
+
+// Ensure OPML string is up-to-date (lazy regeneration)
+function ensureOpmlFresh() {
+  if (_opmlDirty) {
+    state.opmlString = dictToOpml(state.sheets);
+    _opmlDirty = false;
+  }
+}
+
+// Generic debounce helper
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timer: any = null;
+  return ((...args: any[]) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  }) as any as T;
 }
 
 // Depth Colors Configuration
@@ -543,7 +574,8 @@ function getFilteredSheets(sheets: MindmapSheet[], query: string): MindmapSheet[
       const copy: MindmapNode = {
         title: node.title,
         note: node.note,
-        label: node.label
+        label: node.label,
+        _originalNode: node
       };
       if (filteredTopics.length > 0) {
         copy.topics = filteredTopics;
@@ -583,7 +615,7 @@ function renderTree(sheets: MindmapSheet[], forceExpandAll = false, queryActive 
     nodeDiv.dataset.title = node.title.toLowerCase();
 
     const header = document.createElement('div');
-    header.className = `tree-node-header ${selectedNode === node ? 'selected-node' : ''}`;
+    header.className = `tree-node-header ${isSelected(node) ? 'selected-node' : ''}`;
 
     const hasChildren = node.topics && node.topics.length > 0;
     
@@ -770,7 +802,7 @@ function getNodeAncestors(node: MindmapNode): MindmapNode[] {
 }
 
 // -------------------------------------------------------------
-// FINDER COLUMN EXPLORER
+// COLUMN EXPLORER
 // -------------------------------------------------------------
 function renderColumnBrowser(sheets: MindmapSheet[]) {
   const browser = document.getElementById('column-browser');
@@ -784,8 +816,8 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
     colDiv.className = 'finder-column';
     
     const header = document.createElement('div');
-    const isSelected = node && selectedNode === node;
-    header.className = `finder-column-header ${node ? 'clickable-header' : ''} ${isSelected ? 'active-header' : ''}`;
+    const isNodeSelected = node && isSelected(node);
+    header.className = `finder-column-header ${node ? 'clickable-header' : ''} ${isNodeSelected ? 'active-header' : ''}`;
     
     const titleSpan = document.createElement('span');
     titleSpan.className = 'column-header-title';
@@ -845,7 +877,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
 
   const createItemButton = (node: MindmapNode, depth: number, isSelectedInPath: boolean, clickHandler: () => void): HTMLElement => {
     const itemBtn = document.createElement('div');
-    const isActive = selectedNode === node;
+    const isActive = isSelected(node);
     itemBtn.className = `finder-item ${isActive ? 'active' : ''} ${(!isActive && isSelectedInPath) ? 'selected-path' : ''}`;
     
     // Colored circle
@@ -960,7 +992,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
       const subList = createColumn(node.title, node);
       for (const sub of node.topics) {
         const subColIndex = parentColIndex + 1;
-        const subInPath = ancestors.includes(sub) || selectedNode === sub;
+        const subInPath = ancestors.includes(sub) || isSelected(sub);
         const btn = createItemButton(sub, currentDepth + 1, subInPath, () => {
           showSubTopics(sub, subColIndex, currentDepth + 1);
         });
@@ -1004,7 +1036,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
   if (sheets.length > 1) {
     const list = createColumn("Feuilles / Cartes");
     sheets.forEach((sheet) => {
-      const inPath = ancestors.includes(sheet.topic) || selectedNode === sheet.topic;
+      const inPath = ancestors.includes(sheet.topic) || isSelected(sheet.topic);
       const btn = createItemButton(sheet.topic, 0, inPath, () => {
         showSubTopics(sheet.topic, 0, 0);
       });
@@ -1021,7 +1053,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
         const nextColIndex = currentColIdx + 1;
         const subList = createColumn(node.title, node);
         for (const sub of node.topics) {
-          const inPath = ancestors.includes(sub) || selectedNode === sub;
+          const inPath = ancestors.includes(sub) || isSelected(sub);
           const btn = createItemButton(sub, i + 1, inPath, () => {
             showSubTopics(sub, nextColIndex, i + 1);
           });
@@ -1064,7 +1096,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
     
     if (rootTopic.topics && rootTopic.topics.length > 0) {
       for (const child of rootTopic.topics) {
-        const inPath = ancestors.includes(child) || selectedNode === child;
+        const inPath = ancestors.includes(child) || isSelected(child);
         const btn = createItemButton(child, 1, inPath, () => {
           showSubTopics(child, 0, 1);
         });
@@ -1092,7 +1124,7 @@ function renderColumnBrowser(sheets: MindmapSheet[]) {
           const nextColIndex = currentColIdx + 1;
           const subList = createColumn(node.title, node);
           for (const sub of node.topics) {
-            const inPath = ancestors.includes(sub) || selectedNode === sub;
+            const inPath = ancestors.includes(sub) || isSelected(sub);
             const btn = createItemButton(sub, i, inPath, () => {
               showSubTopics(sub, nextColIndex, i);
             });
@@ -1333,6 +1365,7 @@ async function deleteHistoryEntry(id: string, e: Event) {
 }
 
 async function loadHistoryEntry(entry: HistoryIndexEntry) {
+  selectedNode = null; // Reset selection from previous map
   let sheets: MindmapSheet[] | null = null;
   try {
     sheets = await idbLoadSheets(entry.id);
@@ -1418,7 +1451,7 @@ function renderHistoryList() {
         <h4 class="history-card-title" title="${escapedFileName}">${escapedDisplayName}</h4>
       </div>
       <div class="history-card-meta">
-        <span class="history-card-date">${dateStr}</span>
+        <span class="history-card-date">${escapeXml(dateStr)}</span>
         <div class="history-card-badge-row">
           <span class="history-card-badge ${badgeClass}">${badgeText}</span>
           <span class="history-card-date">${escapedFileSizeText}</span>
@@ -1550,12 +1583,13 @@ async function loadFile(file: File) {
 // EXPORT OPML DOWNLOAD
 // -------------------------------------------------------------
 function downloadOpml() {
+  ensureOpmlFresh();
   if (!state.opmlString) {
     showToast("Aucune donnée OPML à exporter", 'error');
     return;
   }
 
-  const defaultName = state.fileName.replace(".xmind", ".opml") || "mindmap.opml";
+  const defaultName = state.fileName.replace(/\.(xmind|opml)$/i, ".opml") || "mindmap.opml";
   const blob = new Blob([state.opmlString], { type: "text/xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   
@@ -1939,28 +1973,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Change File Button
-  document.getElementById('btn-change-file')?.addEventListener('click', () => {
+  document.getElementById('btn-change-file')?.addEventListener('click', async () => {
     if (autoSaveTimeout) {
       clearTimeout(autoSaveTimeout);
     }
-    saveCurrentToHistory();
+    await saveCurrentToHistory();
 
+    selectedNode = null;
     if (fileInput) fileInput.value = "";
     document.getElementById('workspace-zone')!.classList.add('hide');
     document.getElementById('upload-zone')!.classList.remove('hide');
+    document.getElementById('node-editor-sidebar')?.classList.add('hide');
     renderHistoryList();
   });
 
   // Save and Close Button
-  document.getElementById('btn-save-close')?.addEventListener('click', () => {
+  document.getElementById('btn-save-close')?.addEventListener('click', async () => {
     if (autoSaveTimeout) {
       clearTimeout(autoSaveTimeout);
     }
-    saveCurrentToHistory();
+    await saveCurrentToHistory();
 
+    selectedNode = null;
     if (fileInput) fileInput.value = "";
     document.getElementById('workspace-zone')!.classList.add('hide');
     document.getElementById('upload-zone')!.classList.remove('hide');
+    document.getElementById('node-editor-sidebar')?.classList.add('hide');
     renderHistoryList();
 
     showToast("Carte enregistrée et fermée.");
@@ -2001,6 +2039,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Copy OPML XML button
   document.getElementById('btn-copy-opml')?.addEventListener('click', () => {
+    ensureOpmlFresh();
     if (!state.opmlString) return;
     navigator.clipboard.writeText(state.opmlString).then(() => {
       showToast("Contenu XML copié dans le presse-papiers !");
@@ -2014,8 +2053,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const searchInput = document.getElementById('search-nodes-input') as HTMLInputElement;
   const clearSearchBtn = document.getElementById('btn-clear-search');
 
+  const debouncedSearch = debounce((val: string) => searchTree(val), 300);
   searchInput?.addEventListener('input', () => {
-    searchTree(searchInput.value);
+    debouncedSearch(searchInput.value);
   });
 
   clearSearchBtn?.addEventListener('click', () => {
@@ -2099,10 +2139,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const editLabelInput = document.getElementById('edit-node-label') as HTMLInputElement;
   const editNoteTextarea = document.getElementById('edit-node-note') as HTMLTextAreaElement;
 
+  const debouncedViewRefresh = debounce(() => refreshAllViews(), 150);
+
   editTitleInput?.addEventListener('input', () => {
     if (selectedNode) {
       selectedNode.title = editTitleInput.value;
-      refreshAllViews();
+      debouncedViewRefresh();
     }
   });
 
@@ -2113,7 +2155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         selectedNode.label = editLabelInput.value;
       }
-      refreshAllViews();
+      debouncedViewRefresh();
     }
   });
 
@@ -2124,7 +2166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         selectedNode.note = editNoteTextarea.value;
       }
-      refreshAllViews();
+      debouncedViewRefresh();
     }
   });
 

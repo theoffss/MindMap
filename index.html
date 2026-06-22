@@ -68,8 +68,8 @@
                 <h2>Importer un fichier .xmind ou .opml</h2>
                 <p class="upload-hint-primary">Glissez-déposez votre fichier ici, ou cliquez pour parcourir</p>
                 <p class="upload-hint-secondary">Prend en charge les formats XMind (.xmind) et OPML (.opml)</p>
-                <div style="margin-top: 20px; z-index: 10; position: relative;">
-                  <button id="btn-new-map-upload" class="text-btn" style="font-size: 0.9rem; padding: 6px 12px;">Créer une nouvelle carte vide</button>
+                <div class="upload-new-map-wrapper">
+                  <button id="btn-new-map-upload" class="text-btn btn-new-map-upload" aria-label="Créer une nouvelle carte vide">Créer une nouvelle carte vide</button>
                 </div>
               </div>
             </div>
@@ -124,7 +124,7 @@
 
             <!-- Action Buttons Panel -->
             <div class="sidebar-section sidebar-actions">
-              <button id="btn-export-opml" class="btn btn-primary">
+              <button id="btn-export-opml" class="btn btn-primary" aria-label="Exporter en OPML">
                 <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
@@ -132,14 +132,14 @@
                 </svg>
                 Exporter en OPML
               </button>
-              <button id="btn-new-map" class="btn btn-secondary">
+              <button id="btn-new-map" class="btn btn-secondary" aria-label="Nouvelle carte">
                 <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
                 Nouvelle carte
               </button>
-              <button id="btn-save-close" class="btn btn-primary" style="background-color: var(--color-green); border-color: var(--color-green);">
+              <button id="btn-save-close" class="btn btn-primary btn-success" aria-label="Enregistrer et Fermer">
                 <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                   <polyline points="17 21 17 13 7 13 7 21"></polyline>
@@ -147,7 +147,7 @@
                 </svg>
                 Enregistrer & Fermer
               </button>
-              <button id="btn-change-file" class="btn btn-secondary">
+              <button id="btn-change-file" class="btn btn-secondary" aria-label="Changer de fichier">
                 <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="23 4 23 10 17 10"></polyline>
                   <polyline points="1 20 1 14 7 14"></polyline>
@@ -250,7 +250,7 @@
                 <div class="visual-controls-row">
                   <span class="visual-label">Navigation : Glissez pour déplacer, molette pour zoomer</span>
                   <div class="visual-actions">
-                    <label class="visual-label" for="svg-depth-select" style="margin-right: 4px;">Profondeur :</label>
+                    <label class="visual-label label-depth" for="svg-depth-select">Profondeur :</label>
                     <select id="svg-depth-select" class="depth-select">
                       <option value="1">1</option>
                       <option value="2" selected>2</option>
@@ -266,12 +266,13 @@
                   <svg id="mindmap-svg" width="100%" height="100%">
                     <g id="mindmap-viewport"></g>
                   </svg>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <!-- Node Editor Sidebar (Right) -->
-        <aside id="node-editor-sidebar" class="sidebar-right hide">
+
+          <!-- Node Editor Sidebar (Right) -->
+          <aside id="node-editor-sidebar" class="sidebar-right hide">
             <div class="editor-header">
               <h2 class="sidebar-title">ÉDITER LE SUJET</h2>
               <button id="btn-close-editor" class="icon-button" aria-label="Fermer l'éditeur">
@@ -282,17 +283,17 @@
             <div class="editor-body">
               <div class="input-group">
                 <label for="edit-node-title" class="input-label">Texte du sujet</label>
-                <input type="text" id="edit-node-title" class="editor-input" placeholder="Titre du sujet" />
+                <input type="text" id="edit-node-title" class="editor-field" placeholder="Titre du sujet" />
               </div>
 
               <div class="input-group">
                 <label for="edit-node-label" class="input-label">Étiquettes / Tags</label>
-                <input type="text" id="edit-node-label" class="editor-input" placeholder="Séparés par des virgules" />
+                <input type="text" id="edit-node-label" class="editor-field" placeholder="Séparés par des virgules" />
               </div>
 
               <div class="input-group">
                 <label for="edit-node-note" class="input-label">Notes / Sous-texte</label>
-                <textarea id="edit-node-note" class="editor-textarea" placeholder="Entrez vos notes ici..."></textarea>
+                <textarea id="edit-node-note" class="editor-field editor-textarea" placeholder="Entrez vos notes ici..."></textarea>
               </div>
 
               <div class="editor-separator"></div>
