@@ -1188,16 +1188,6 @@ function getHistorySheets(id: string): MindmapSheet[] | null {
   }
 }
 
-function getHistory(): HistoryEntry[] {
-  const index = getHistoryIndex();
-  return index.map(entry => ({
-    id: entry.id,
-    fileName: entry.fileName,
-    fileSizeText: entry.fileSizeText,
-    lastModified: entry.lastModified,
-    sheets: [] // Sheets are loaded on-demand, not eagerly
-  }));
-}
 
 function writeHistoryIndex(index: HistoryIndexEntry[]) {
   try {
@@ -1222,23 +1212,36 @@ function saveCurrentToHistory() {
   };
 
   // Save the sheets data separately
+  let dataSaved = false;
+  const dataKey = 'xmind_data_' + indexEntry.id;
+  const sheetsJson = JSON.stringify(state.sheets);
+
   try {
-    localStorage.setItem('xmind_data_' + indexEntry.id, JSON.stringify(state.sheets));
-  } catch (e) {
+    localStorage.setItem(dataKey, sheetsJson);
+    dataSaved = true;
+  } catch (_e) {
+    // Quota exceeded — clean oldest entries to make space
     console.warn("localStorage quota exceeded for sheets data. Cleaning oldest entries.");
-    // Clean oldest entries to make space
-    let index = getHistoryIndex();
-    while (index.length > 0) {
-      const oldest = index.pop()!;
+    const currentIndex = getHistoryIndex();
+    // Remove oldest entries (at the end), skipping the current entry if it already exists
+    const candidates = currentIndex.filter(h => h.id !== indexEntry.id);
+    while (candidates.length > 0) {
+      const oldest = candidates.pop()!;
       localStorage.removeItem('xmind_data_' + oldest.id);
-      writeHistoryIndex(index);
       try {
-        localStorage.setItem('xmind_data_' + indexEntry.id, JSON.stringify(state.sheets));
+        localStorage.setItem(dataKey, sheetsJson);
+        dataSaved = true;
         break;
-      } catch (_e) {
+      } catch (_e2) {
         // Continue removing older entries
       }
     }
+  }
+
+  if (!dataSaved) {
+    console.warn("Could not save sheets to localStorage — data too large.");
+    showToast("Carte trop volumineuse pour la sauvegarde locale automatique. Utilisez « Exporter en OPML » pour sauvegarder manuellement.", 'error');
+    return;
   }
 
   let index = getHistoryIndex();
@@ -1323,8 +1326,17 @@ function renderHistoryList() {
   const historyList = document.getElementById('history-list');
   if (!historyList) return;
 
-  const history = getHistory();
-  if (history.length === 0) {
+  const index = getHistoryIndex();
+
+  // Filter out orphan entries whose sheet data is missing
+  const validEntries = index.filter(entry => localStorage.getItem('xmind_data_' + entry.id) !== null);
+
+  // Clean up orphans from index if any were found
+  if (validEntries.length !== index.length) {
+    writeHistoryIndex(validEntries);
+  }
+
+  if (validEntries.length === 0) {
     historySection?.classList.add('hide');
     return;
   }
@@ -1332,7 +1344,7 @@ function renderHistoryList() {
   historySection?.classList.remove('hide');
   historyList.innerHTML = "";
 
-  history.forEach(entry => {
+  validEntries.forEach(entry => {
     const isOpml = entry.fileName.toLowerCase().endsWith('.opml');
     const badgeText = isOpml ? 'OPML' : 'XMIND';
     const badgeClass = isOpml ? 'badge-opml' : 'badge-xmind';
@@ -1371,7 +1383,7 @@ function renderHistoryList() {
     `;
 
     card.addEventListener('click', () => {
-      loadHistoryEntry(entry);
+      loadHistoryEntry({ id: entry.id, fileName: entry.fileName, fileSizeText: entry.fileSizeText, lastModified: entry.lastModified, sheets: [] });
     });
 
     const deleteBtn = card.querySelector('.history-card-delete');
