@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'MindMap',
-      script: 'server.js',
+      script: 'server.cjs',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
